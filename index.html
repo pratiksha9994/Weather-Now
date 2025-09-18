@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weather Now — Open‑Meteo Demo</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --card: #121a2a;
+      --muted: #9bb0d1;
+      --text: #e6eefc;
+      --accent: #4da3ff;
+      --warn: #ffcc66;
+      --radius: 18px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1000px 600px at 80% -10%, #1a2a48 0%, var(--bg) 40%) no-repeat, var(--bg);
+      color: var(--text);
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px 16px 48px;
+    }
+    header {
+      display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    }
+    .brand { font-weight: 700; letter-spacing: 0.2px; font-size: clamp(18px, 2.6vw, 24px); }
+    .search {
+      display: grid; grid-template-columns: 1fr auto auto; gap: 10px; width: min(720px, 100%);
+      background: rgba(255,255,255,0.03); padding: 10px; border-radius: var(--radius);
+      backdrop-filter: blur(6px);
+    }
+    input, select, button {
+      background: var(--card); color: var(--text); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px; padding: 12px 14px; font-size: 15px; outline: none;
+    }
+    input::placeholder { color: #91a4c5; }
+    button {
+      background: linear-gradient(135deg, var(--accent), #6bb6ff);
+      color: #071120; font-weight: 700; border: none; cursor: pointer;
+      transition: transform 0.06s ease, filter 0.2s ease;
+    }
+    button:active { transform: translateY(1px); }
+    button[disabled] { filter: grayscale(0.4) brightness(0.8); cursor: not-allowed; }
+
+    .grid {
+      display: grid; gap: 16px; margin-top: 20px;
+      grid-template-columns: 1fr; /* mobile */
+    }
+    @media (min-width: 860px) {
+      .grid { grid-template-columns: 1.1fr 1fr; }
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    .card h2 { margin: 0 0 10px; font-size: 18px; color: var(--muted); font-weight: 600; }
+
+    .now {
+      display: grid; gap: 20px; grid-template-columns: 1fr; align-items: start;
+    }
+    @media (min-width: 520px) { .now { grid-template-columns: 1fr auto; } }
+
+    .temp {
+      font-size: clamp(42px, 9vw, 64px); font-weight: 800; line-height: 1; letter-spacing: -1px;
+    }
+    .muted { color: var(--muted); }
+
+    .kpis { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; }
+    @media (min-width: 520px) { .kpis { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+    .kpi {
+      background: var(--card); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px;
+      display: grid; gap: 4px; align-content: center; text-align: center;
+    }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .value { font-size: 16px; font-weight: 700; }
+
+    .days { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+    .day {
+      background: var(--card); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 12px;
+      display: grid; gap: 6px; text-align: center;
+    }
+    .day .dtemp { font-weight: 700; }
+
+    .footer { margin-top: 20px; color: var(--muted); font-size: 13px; }
+    .err { color: var(--warn); font-weight: 600; }
+    .hidden { display: none !important; }
+    .loader { font-size: 14px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="brand">🌤️ Weather Now <span class="muted">· Open‑Meteo</span></div>
+      <form id="searchForm" class="search" autocomplete="off">
+        <input id="q" type="text" placeholder="Search city (e.g., Pune, Mumbai, London)" required />
+        <select id="unit">
+          <option value="c">°C, m/s</option>
+          <option value="f">°F, mph</option>
+        </select>
+        <button id="go" type="submit">Get Weather</button>
+      </form>
+    </header>
+
+    <div id="status" class="loader">Type a city and press <b>Get Weather</b>.</div>
+
+    <section class="grid hidden" id="results">
+      <article class="card">
+        <h2>Now</h2>
+        <div class="now">
+          <div>
+            <div id="place" class="muted">—</div>
+            <div class="temp"><span id="nowTemp">—</span></div>
+            <div id="summary" class="muted">—</div>
+          </div>
+          <div class="kpis">
+            <div class="kpi"><div class="label">Feels like</div><div class="value" id="feels">—</div></div>
+            <div class="kpi"><div class="label">Wind</div><div class="value" id="wind">—</div></div>
+            <div class="kpi"><div class="label">Humidity</div><div class="value" id="humidity">—</div></div>
+            <div class="kpi"><div class="label">Precip (1h)</div><div class="value" id="precip">—</div></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Next 7 days</h2>
+        <div class="days" id="days"> </div>
+      </article>
+    </section>
+
+    <p class="footer">Data from <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open‑Meteo</a>. No API key required. Built for demo/learning use.</p>
+  </div>
+
+  <script>
+    const form = document.getElementById('searchForm');
+    const q = document.getElementById('q');
+    const unit = document.getElementById('unit');
+    const statusEl = document.getElementById('status');
+    const results = document.getElementById('results');
+
+    const place = document.getElementById('place');
+    const nowTemp = document.getElementById('nowTemp');
+    const summary = document.getElementById('summary');
+    const feels = document.getElementById('feels');
+    const wind = document.getElementById('wind');
+    const humidity = document.getElementById('humidity');
+    const precip = document.getElementById('precip');
+    const days = document.getElementById('days');
+
+    async function geocodeCity(city) {
+      const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+      url.searchParams.set('name', city);
+      url.searchParams.set('count', 1);
+      url.searchParams.set('language', 'en');
+      url.searchParams.set('format', 'json');
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Geocoding failed');
+      const data = await res.json();
+      if (!data.results || data.results.length === 0) throw new Error('No matching location');
+      const r = data.results[0];
+      return { lat: r.latitude, lon: r.longitude, name: r.name, admin: r.admin1, country: r.country_code };
+    }
+
+    function fmt(n, digits = 0) { return Number(n).toFixed(digits); }
+
+    function codeToDescription(code) {
+      // Minimal mapping for common weather codes
+      const map = {
+        0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+        45: 'Fog', 48: 'Depositing rime fog',
+        51: 'Light drizzle', 53: 'Moderate drizzle', 55: 'Dense drizzle',
+        61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain',
+        66: 'Freezing rain', 67: 'Heavy freezing rain',
+        71: 'Slight snow', 73: 'Moderate snow', 75: 'Heavy snow',
+        77: 'Snow grains',
+        80: 'Rain showers', 81: 'Heavy rain showers', 82: 'Violent rain showers',
+        95: 'Thunderstorm', 96: 'Thunderstorm w/ hail', 99: 'Thunderstorm w/ heavy hail'
+      };
+      return map[code] || '—';
+    }
+
+    async function getWeather(lat, lon, unitMode = 'c') {
+      const url = new URL('https://api.open-meteo.com/v1/forecast');
+      url.searchParams.set('latitude', lat);
+      url.searchParams.set('longitude', lon);
+      url.searchParams.set('current', ['temperature_2m','apparent_temperature','relative_humidity_2m','precipitation','wind_speed_10m','weather_code'].join(','));
+      url.searchParams.set('daily', ['weather_code','temperature_2m_max','temperature_2m_min','precipitation_sum','wind_speed_10m_max'].join(','));
+      url.searchParams.set('forecast_days', 7);
+      url.searchParams.set('timezone', 'auto');
+      if (unitMode === 'f') {
+        url.searchParams.set('temperature_unit', 'fahrenheit');
+        url.searchParams.set('wind_speed_unit', 'mph');
+      } else {
+        url.searchParams.set('temperature_unit', 'celsius');
+        url.searchParams.set('wind_speed_unit', 'ms');
+      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Weather fetch failed');
+      return res.json();
+    }
+
+    function renderNow(meta, weather, unitMode) {
+      const tUnit = unitMode === 'f' ? '°F' : '°C';
+      const wUnit = unitMode === 'f' ? 'mph' : 'm/s';
+      place.textContent = `${meta.name}${meta.admin ? ', ' + meta.admin : ''}${meta.country ? ' · ' + meta.country : ''}`;
+      nowTemp.textContent = `${fmt(weather.current.temperature_2m, 0)}${tUnit}`;
+      summary.textContent = codeToDescription(weather.current.weather_code);
+      feels.textContent = `${fmt(weather.current.apparent_temperature, 0)}${tUnit}`;
+      wind.textContent = `${fmt(weather.current.wind_speed_10m, 1)} ${wUnit}`;
+      humidity.textContent = `${fmt(weather.current.relative_humidity_2m, 0)}%`;
+      precip.textContent = `${fmt(weather.current.precipitation, 1)} mm`;
+    }
+
+    function renderDaily(weather, unitMode) {
+      const tUnit = unitMode === 'f' ? '°F' : '°C';
+      const wUnit = unitMode === 'f' ? 'mph' : 'm/s';
+      days.innerHTML = '';
+      const d = weather.daily;
+      for (let i = 0; i < d.time.length; i++) {
+        const el = document.createElement('div');
+        el.className = 'day';
+        const date = new Date(d.time[i]);
+        const nice = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        el.innerHTML = `
+          <div class="muted">${nice}</div>
+          <div>${codeToDescription(d.weather_code[i])}</div>
+          <div class="dtemp">${fmt(d.temperature_2m_max[i],0)}${tUnit} / ${fmt(d.temperature_2m_min[i],0)}${tUnit}</div>
+          <div class="muted">💧 ${fmt(d.precipitation_sum[i],1)} mm · 🌬️ ${fmt(d.wind_speed_10m_max[i],0)} ${wUnit}</div>
+        `;
+        days.appendChild(el);
+      }
+    }
+
+    function setLoading(loading) {
+      const btn = document.getElementById('go');
+      btn.disabled = loading;
+      statusEl.classList.toggle('hidden', loading);
+      statusEl.textContent = loading ? 'Loading…' : '';
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const city = q.value.trim();
+      if (!city) return;
+      try {
+        setLoading(true);
+        results.classList.add('hidden');
+        statusEl.classList.remove('hidden');
+        statusEl.textContent = 'Finding place…';
+        const meta = await geocodeCity(city);
+        statusEl.textContent = 'Fetching weather…';
+        const weather = await getWeather(meta.lat, meta.lon, unit.value);
+        renderNow(meta, weather, unit.value);
+        renderDaily(weather, unit.value);
+        results.classList.remove('hidden');
+        statusEl.classList.add('hidden');
+      } catch (err) {
+        console.error(err);
+        statusEl.classList.remove('hidden');
+        statusEl.innerHTML = `<span class="err">${err.message || 'Something went wrong'}</span>`;
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    // Helpful: prefill with user's browser locale city via geolocation (permission optional)
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        try {
+          statusEl.textContent = 'Fetching local weather…';
+          const { latitude, longitude } = pos.coords;
+          // Reverse geocode for display name
+          const rev = await fetch(`https://geocoding-api.open-meteo.com/v1/reverse?latitude=${latitude}&longitude=${longitude}&language=en`);
+          const revData = await rev.json();
+          const meta = revData?.results?.[0]
+            ? { lat: latitude, lon: longitude, name: revData.results[0].name, admin: revData.results[0].admin1, country: revData.results[0].country_code }
+            : { lat: latitude, lon: longitude, name: 'Your location' };
+          const weather = await getWeather(latitude, longitude, unit.value);
+          renderNow(meta, weather, unit.value);
+          renderDaily(weather, unit.value);
+          results.classList.remove('hidden');
+          statusEl.classList.add('hidden');
+        } catch (e) {
+          // ignore geolocation errors silently
+        }
+      });
+    }
+  </script>
+</body>
+</html>
